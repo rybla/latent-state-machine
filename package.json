@@ -11,6 +11,7 @@
     "start": "NODE_ENV=production bun src/index.tsx"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.0",
     "react": "^19",
     "react-dom": "^19"
   },
