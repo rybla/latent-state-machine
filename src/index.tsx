@@ -1,52 +1,58 @@
 import { serve } from "bun";
 import index from "./index.html";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import google, { GoogleGenerativeAI } from "@google/generative-ai";
 import {
-  RequestData_GenerateText,
-  ResponseData_GenerateText,
-} from "./common/types";
+  endpoint_Generate,
+  endpoint_GenerateStructure,
+  RequestData_Generate,
+  RequestData_GenerateStructure,
+  ResponseData_Generate,
+  ResponseData_GenerateStructure,
+} from "@/common/endpoint";
+import * as schema from "@/common/schema";
 
 const server = serve({
   routes: {
     // Serve index.html for all unmatched routes.
     "/*": index,
 
-    "/api/gai/text": {
-      async POST(req) {
-        const data: RequestData_GenerateText = await req.json();
+    [endpoint_Generate]: {
+      async POST(request) {
+        const request_data: RequestData_Generate = await request.json();
         const client = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
-        const model = client.getGenerativeModel({ model: data.model });
-        const result = await model.generateContent({
-          contents: data.content,
-          systemInstruction: data.systemInstruction,
-          tools: data.tools,
-          toolConfig: data.toolConfig,
+        const model = client.getGenerativeModel({
+          model: request_data.model,
         });
-        const response_data: ResponseData_GenerateText = { result };
+        const result = await model.generateContent({
+          tools: request_data.tools,
+          toolConfig: request_data.toolConfig,
+          systemInstruction: request_data.systemInstruction,
+          contents: request_data.content,
+        });
+        const response_data: ResponseData_Generate = { result };
         return new Response(JSON.stringify(response_data));
       },
     },
 
-    "/api/hello": {
-      async GET(req) {
-        return Response.json({
-          message: "Hello, world!",
-          method: "GET",
+    [endpoint_GenerateStructure]: {
+      async POST(response) {
+        const request_data: RequestData_GenerateStructure =
+          await response.json();
+        const client = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
+        const model = client.getGenerativeModel({
+          model: request_data.model,
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: request_data.responseSchema,
+          },
         });
-      },
-      async PUT(req) {
-        return Response.json({
-          message: "Hello, world!",
-          method: "PUT",
+        const result = await model.generateContent({
+          systemInstruction: request_data.systemInstruction,
+          contents: request_data.content,
         });
+        const response_data: ResponseData_GenerateStructure = { result };
+        return new Response(JSON.stringify(response_data));
       },
-    },
-
-    "/api/hello/:name": async (req) => {
-      const name = req.params.name;
-      return Response.json({
-        message: `Hello, ${name}!`,
-      });
     },
   },
 

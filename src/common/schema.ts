@@ -1,4 +1,4 @@
-import google, { BaseSchema } from "@google/generative-ai";
+import google from "@google/generative-ai";
 
 // ----------------------------------------------------------------------------
 
@@ -73,7 +73,7 @@ export type Infer<S extends Schema> = S["type"] extends "string"
 
 // ----------------------------------------------------------------------------
 
-export function toGoogleSchema(schema: Schema): google.Schema {
+export function to_GoogleSchema(schema: Schema): google.Schema {
   switch (schema.type) {
     case "string":
       return { type: google.SchemaType.STRING };
@@ -85,7 +85,7 @@ export function toGoogleSchema(schema: Schema): google.Schema {
       const schema_item = schema.item as Schema;
       return {
         type: google.SchemaType.ARRAY,
-        items: toGoogleSchema(schema_item),
+        items: to_GoogleSchema(schema_item),
       };
     case "object": {
       const props: [string, Schema][] = Object.entries(schema.props)
@@ -93,7 +93,7 @@ export function toGoogleSchema(schema: Schema): google.Schema {
         .map(([x, [_i, s]]) => [x, s as Schema] as [string, Schema]);
       const properties: { [key: string]: google.Schema } = {};
       for (const [name, schema] of props) {
-        properties[name] = toGoogleSchema(schema);
+        properties[name] = to_GoogleSchema(schema);
       }
       const required = props.map(([name, _schema]) => name);
       return {
