@@ -30,6 +30,7 @@ export type Machine<State, Ts extends Transitions> = {
   update_State: (state: State, transitions: Transition<Ts>[]) => Promise<State>;
   render_State: (state: State) => ReactNode;
   render_Transition: (transition: Transition<Ts>) => ReactNode;
+  // render_State_And_Transitions;
 };
 
 export type Message = {
