@@ -17,3 +17,24 @@ export type UnReadonlyTuple<T> = T extends readonly any[]
   : never;
 
 export type ReadonlyTuple<T> = T extends any[] ? readonly T[number][] : never;
+
+export function wrap(text: string, max_width: number): string {
+  const words = text.split(" ");
+  let lines: string[] = [];
+  let currentLine = "";
+
+  for (const word of words) {
+    if (currentLine.length + word.length + 1 <= max_width) {
+      currentLine += (currentLine ? " " : "") + word;
+    } else {
+      lines.push(currentLine);
+      currentLine = word;
+    }
+  }
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines.join("\n");
+}

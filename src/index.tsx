@@ -19,16 +19,27 @@ const server = serve({
     [endpoint_Generate]: {
       async POST(request) {
         const request_data: RequestData_Generate = await request.json();
+
+        console.log(
+          `
+request_data:
+  - systemInstruction:\n    ${JSON.stringify(request_data.systemInstruction)}
+  - content:\n
+${request_data.content.map((content) => `    - ${JSON.stringify(content)}`)}
+`.trim(),
+        );
+
         const client = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
         const model = client.getGenerativeModel({
           model: request_data.model,
         });
-        const result = await model.generateContent({
-          tools: request_data.tools,
-          toolConfig: request_data.toolConfig,
-          systemInstruction: request_data.systemInstruction,
-          contents: request_data.content,
-        });
+        const result: google.GenerateContentResult =
+          await model.generateContent({
+            tools: request_data.tools,
+            toolConfig: request_data.toolConfig,
+            systemInstruction: request_data.systemInstruction,
+            contents: request_data.content,
+          });
         const response_data: ResponseData_Generate = { result };
         return new Response(JSON.stringify(response_data));
       },

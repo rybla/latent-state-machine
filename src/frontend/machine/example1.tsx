@@ -1,4 +1,4 @@
-import { Codomain, identity } from "@/utilities";
+import { Codomain, identity, wrap } from "@/utilities";
 import {
   Machine,
   make_Machine,
@@ -7,34 +7,49 @@ import {
 } from "../machine";
 import * as schema from "@/common/schema";
 import Diagram from "../widgets/diagram";
+import deepcopy from "deepcopy";
 
-const players = ["Alice", "Bob", "Charlie"];
-type Player = (typeof players)[number];
+type Player = {
+  name: string;
+  secret_objective: string;
+};
 
 type State = {
-  active_player: Player;
-  tokens: { [K in Player]: number };
-  actions: { actor: Player; action: Transition<T> }[];
+  active_player_index: number;
+  players: Player[];
+  tokens: { [key: string]: number };
 };
 
 const starting_tokens = 10;
+const diagram_scale = 0.7;
+const diagram_width = 600;
+const diagram_height = 600;
+const diagram_radius = diagram_scale * diagram_width;
+const node_radius = 90;
 
-const Transition = (state: State) => ({
+const get_transitions = (state: State) => ({
   send_tokens: {
     description:
       "Secretly send some tokens to another player. Only that player is notified that you sent the tokens.",
     schema: schema.object({
       sender: [
         0,
-        schema.string_enum(players, {
-          description: "Your name.",
-        }),
+        schema.string_enum(
+          state.players.map((p) => p.name),
+          {
+            description: "Your name.",
+          },
+        ),
       ],
-      recipient: [
+      receiver: [
         1,
-        schema.string_enum(players, {
-          description: "The name of the player to secretly send the tokens to.",
-        }),
+        schema.string_enum(
+          state.players.map((p) => p.name),
+          {
+            description:
+              "The name of the player to secretly send the tokens to.",
+          },
+        ),
       ],
       amount: [
         2,
@@ -51,15 +66,22 @@ const Transition = (state: State) => ({
     schema: schema.object({
       sender: [
         0,
-        schema.string_enum(players, {
-          description: "Your name.",
-        }),
+        schema.string_enum(
+          state.players.map((p) => p.name),
+          {
+            description: "Your name.",
+          },
+        ),
       ],
-      recipient: [
+      receiver: [
         1,
-        schema.string_enum(players, {
-          description: "The name of the player to send the secret message to.",
-        }),
+        schema.string_enum(
+          state.players.map((p) => p.name),
+          {
+            description:
+              "The name of the player to send the secret message to.",
+          },
+        ),
       ],
       message: [
         2,
@@ -72,28 +94,50 @@ const Transition = (state: State) => ({
   },
 });
 
-type T = Codomain<typeof Transition>;
-type X = Transition<T>;
+type T = Codomain<typeof get_transitions>;
 
 export const machine = make_Machine<State, T>({
   name: "example1",
-  initial_State: {
-    active_player: players[0],
-    tokens: players.reduce(
-      (acc, player) => ({ ...acc, [player]: starting_tokens }),
-      {} as { [K in Player]: number },
-    ),
-    actions: [],
-  },
-  get_transitions: Transition,
-  prompt_Transition: async (state) => {
-    const you = state.active_player;
-    const recent_actions = state.actions;
+  initial_State: (() => {
+    const players = [
+      {
+        name: "Alice",
+        secret_objective:
+          "subtly convince the other players to give you their tokens",
+      },
+      {
+        name: "Bob",
+        secret_objective:
+          "figure out which player is trying to collect the most tokens, and give some tokens to all players other than them",
+      },
+      {
+        name: "Charlie",
+        secret_objective:
+          "distribute tokens so that each player has the same number of tokens",
+      },
+    ];
+    return {
+      active_player_index: 0,
+      players,
+      tokens: players.reduce(
+        (acc, player) => ({ ...acc, [player.name]: starting_tokens }),
+        {} as { string: number },
+      ),
+    };
+  })(),
+  get_transitions,
+  prompt_transition: async (history, state) => {
+    const i_you = state.active_player_index;
+    const you = state.players[i_you];
 
     return {
       system: `
-You are playing a casual role-playing game with several other players. Your name is ${you}.
-The other players are: ${players.filter((player) => player !== you).join(", ")}.
+You are playing a casual role-playing game with several other players. Each player has their own secret objective.
+Your name is ${you.name} and your secret objective is: ${you.secret_objective}.
+The other players are: ${state.players
+        .filter((other) => other !== you)
+        .map((other) => other.name)
+        .join(", ")}.
 
 Here's how the game works. The players take turns in a random order. On each turn, the active player can do any number of the following actions:
   - Secretly send a short message to another player.
@@ -106,36 +150,47 @@ Use the appropriate tools to perform your actions each turn.
       messages: [
         make_user_message(
           `
-It's now your turn in the game.
-Since your last turn, you observed the following actions:
-${recent_actions
-  .flatMap(({ actor, action }) => {
-    switch (action.name) {
-      case "send_message": {
-        if (you === actor) {
-          return [
-            `  - You told ${action.args.recipient}: ${action.args.message}`,
-          ];
-        } else if (you === action.args.recipient) {
-          return [`  - ${actor} told you: ${action.args.message}`];
-        } else {
-          return [];
-        }
-      }
-      case "send_tokens": {
-        if (you === actor) {
-          return [
-            `  - You sent ${action.args.amount} tokens to ${action.args.recipient}.`,
-          ];
-        } else if (you === action.args.recipient) {
-          return [`  - ${actor} sent you ${action.args.amount} tokens.`];
-        } else {
-          return [];
-        }
-      }
-    }
-  })
-  .join("\n")}
+
+${(() => {
+  if (history.length === 0) {
+    return `It's now your turn, which is the first turn of the game.`;
+  } else {
+    return `It's now your turn in the game. You have observed the following actions recently:\n
+    ${history
+      .slice(history.length - 5)
+      .flatMap(([ts, _]) =>
+        ts.flatMap((t) => {
+          switch (t.name) {
+            case "send_message": {
+              if (you.name === t.args.sender) {
+                return [`  - You told ${t.args.receiver}: ${t.args.message}`];
+              } else if (you.name === t.args.receiver) {
+                return [`  - ${t.args.sender} told you: ${t.args.message}`];
+              } else {
+                return [];
+              }
+            }
+            case "send_tokens": {
+              if (you.name === t.args.sender) {
+                return [
+                  `  - You sent ${t.args.amount} tokens to ${t.args.receiver}.`,
+                ];
+              } else if (you.name === t.args.receiver) {
+                return [
+                  `  - ${t.args.sender} sent you ${t.args.amount} tokens.`,
+                ];
+              } else {
+                return [];
+              }
+            }
+          }
+        }),
+      )
+      .join("\n")}`.trim();
+  }
+})()}
+
+You currently have ${state.tokens[you.name]} tokens.
 
 Use the appropriate tools to perform your actions this turn.
 `.trim(),
@@ -143,71 +198,89 @@ Use the appropriate tools to perform your actions this turn.
       ],
     };
   },
-  update_State: async (old_state, transitions) => {
-    const you = old_state.active_player;
-    const state = { ...old_state };
-    for (const action of transitions) {
-      switch (action.name) {
+  update_state: async (state_, transitions) => {
+    const state = deepcopy(state_);
+    for (const t of transitions) {
+      if (
+        !(
+          state.active_player_index ==
+          state.players.findIndex((p) => p.name == t.args.sender)
+        )
+      ) {
+        console.error("active player is not sender");
+        break;
+      }
+      switch (t.name) {
         case "send_message": {
-          old_state.actions.push({ actor: you, action: action });
           break;
         }
         case "send_tokens": {
-          if (old_state.tokens[you] >= action.args.amount) {
-            old_state.tokens[you] -= action.args.amount;
-            old_state.tokens[action.args.recipient] += action.args.amount;
+          if (state.tokens[t.args.sender] >= t.args.amount) {
+            state.tokens[t.args.sender] -= t.args.amount;
+            state.tokens[t.args.receiver] += t.args.amount;
           }
-          old_state.actions.push({ actor: you, action: action });
           break;
         }
       }
     }
+    state.active_player_index =
+      (state.active_player_index + 1) % state.players.length;
     return state;
   },
-  render_State_And_Transitions: (s, ts) => (
-    <div>
-      {(() => (
-        <Diagram
-          width={diagram_scale}
-          height={diagram_scale}
-          nodes={players.map((p, i_p) => ({
-            id: p,
-            label: p,
-            x:
-              diagram_width / 2 +
-              diagram_scale *
-                (diagram_width / 2) *
-                Math.cos(2 * Math.PI * (i_p / players.length)),
-            y:
-              diagram_height / 2 +
-              diagram_scale *
-                (diagram_height / 2) *
-                Math.sin(2 * Math.PI * (i_p / players.length)),
-            fillStyle: p === s.active_player ? "blue" : "gray",
-          }))}
-          edges={ts.map((t) => {
-            switch (t.name) {
-              case "send_message":
-                return {
-                  source: t.args.sender,
-                  target: t.args.recipient,
-                  label: "message",
-                };
-              case "send_tokens":
-                return {
-                  source: t.args.sender,
-                  target: t.args.recipient,
-                  label: "tokens",
-                };
-            }
-          })}
-        />
-      ))()}
-    </div>
-  ),
+  render_state_and_transitions: (s, ts) => {
+    const ts_collected: [
+      { sender: string; receiver: string },
+      Transition<T>[],
+    ][] = [];
+    for (const t of ts) {
+      const ts_c = ts_collected.find(
+        ([{ sender, receiver }, _]) =>
+          sender == t.args.sender && receiver == t.args.receiver,
+      );
+      if (ts_c === undefined) {
+        ts_collected.push([
+          { sender: t.args.sender, receiver: t.args.receiver },
+          [t],
+        ]);
+      } else {
+        ts_c[1].push(t);
+      }
+    }
+    return (
+      <Diagram
+        width={diagram_width}
+        height={diagram_height}
+        nodes={s.players.map((p, i_p) => ({
+          id: p.name,
+          label: `${p.name}: ${s.tokens[p.name]}\n\n${wrap(p.secret_objective, 30)}`,
+          x:
+            diagram_width / 2 +
+            diagram_scale *
+              (diagram_width / 2) *
+              Math.cos(2 * Math.PI * (i_p / s.players.length)),
+          y:
+            diagram_height / 2 +
+            diagram_scale *
+              (diagram_height / 2) *
+              Math.sin(2 * Math.PI * (i_p / s.players.length)),
+          fillStyle: i_p === s.active_player_index ? "lightblue" : "lightgray",
+          radius: node_radius,
+        }))}
+        edges={ts_collected.map(([{ sender, receiver }, ts], index) => ({
+          source: sender,
+          target: receiver,
+          label: ts
+            .map((t) => {
+              switch (t.name) {
+                case "send_message":
+                  return `${wrap(t.args.message, 30)}`;
+                case "send_tokens":
+                  return `sent ${t.args.amount} tokens`;
+              }
+            })
+            .join("\n\n"),
+        }))}
+      />
+    );
+  },
 });
-
-const diagram_scale = 0.8;
-const diagram_width = 200;
-const diagram_height = 200;
-const diagram_radius = diagram_scale * diagram_width;

@@ -8,7 +8,7 @@ import {
 import * as schema from "@/common/schema";
 import "./machine.css";
 import * as request from "@/frontend/request";
-import google from "@google/generative-ai";
+import * as google from "@google/generative-ai";
 
 // -----------------------------------------------------------------------------
 
@@ -31,12 +31,15 @@ export type Machine<State, T extends TransitionForm> = {
   name: string;
   initial_State: State;
   get_transitions: (state: State) => T;
-  prompt_Transition: (state: State) => Promise<{
+  prompt_transition: (
+    history: History<State, T>,
+    state: State,
+  ) => Promise<{
     system: string;
     messages: Message[];
   }>;
-  update_State: (state: State, transitions: Transition<T>[]) => Promise<State>;
-  render_State_And_Transitions: (
+  update_state: (state: State, transitions: Transition<T>[]) => Promise<State>;
+  render_state_and_transitions: (
     state: State,
     transitions: Transition<T>[],
   ) => ReactNode;
@@ -65,11 +68,12 @@ export function make_Machine<State, Ts extends TransitionForm>(
 
 // -----------------------------------------------------------------------------
 
-async function generate_Transitions<State, T extends TransitionForm>(
+async function generate_transitions<State, T extends TransitionForm>(
   machine: Machine<State, T>,
+  history: History<State, T>,
   state: State,
 ): Promise<Transition<T>[]> {
-  const prompt = await machine.prompt_Transition(state);
+  const prompt = await machine.prompt_transition(history, state);
 
   const functionDeclarations: google.FunctionDeclaration[] = Object.entries(
     machine.get_transitions(state),
@@ -102,39 +106,49 @@ async function generate_Transitions<State, T extends TransitionForm>(
   // TODO: is this ever anything interesting?
   // const text = result.response.text();
 
-  const functionCalls = result.response.functionCalls();
-  if (functionCalls === undefined) throw new Error("No function calls");
-  const transitions: Transition<T>[] = functionCalls.map(
-    (fc) => ({ name: fc.name, args: fc.args }) as Transition<T>,
+  const transitions: Transition<T>[] = (
+    (result.response.candidates ?? []) as google.GenerateContentCandidate[]
+  ).flatMap((candidate) =>
+    candidate.content.parts.flatMap((part) =>
+      part.functionCall === undefined
+        ? []
+        : ({
+            name: part.functionCall.name,
+            args: part.functionCall.args,
+          } as Transition<T>),
+    ),
   );
+
   return transitions;
 }
 
-async function generate_Next_State<State, T extends TransitionForm>(
+async function generate_next_state<State, T extends TransitionForm>(
   machine: Machine<State, T>,
+  history: History<State, T>,
   state: State,
-): Promise<[State, Transitions<T>]> {
-  const ts = await generate_Transitions(machine, state);
-  return [await machine.update_State(state, ts), ts];
+): Promise<History<State, T>[number]> {
+  const ts = await generate_transitions(machine, history, state);
+  return [ts, await machine.update_state(state, ts)];
 }
 
 // -----------------------------------------------------------------------------
 
+export type History<State, T extends TransitionForm> = [
+  Transitions<T>,
+  State,
+][];
+
 export function Component<State, T extends TransitionForm>(props: {
   machine: Machine<State, T>;
 }): ReactNode {
-  const [history, set_history] = useState<[State, Transitions<T>][]>([]);
-
-  function get_State_and_Transitions(): [State, Transitions<T>] {
-    if (history.length === 0) return [props.machine.initial_State, []];
-    return history[history_index];
-  }
-
-  function push_history(state: State, ts: Transitions<T>) {
-    set_history((history) => [...history, [state, ts]]);
-  }
-
+  const [history, set_history] = useState<History<State, T>>([
+    [[], props.machine.initial_State],
+  ]);
   const [history_index, set_history_index] = useState(0);
+
+  function push_history(ts: Transitions<T>, state: State) {
+    set_history((history) => [...history, [ts, state]]);
+  }
 
   function modify_history_index(f: (i: number) => number) {
     const i = f(history_index);
@@ -147,9 +161,9 @@ export function Component<State, T extends TransitionForm>(props: {
   }, [history]);
 
   async function update() {
-    const [s, _] = get_State_and_Transitions();
-    const [s_new, ts] = await generate_Next_State(props.machine, s);
-    push_history(s_new, ts);
+    const [_, s] = history[history_index];
+    const [ts, s_new] = await generate_next_state(props.machine, history, s);
+    push_history(ts, s_new);
   }
 
   async function step_forward() {
@@ -160,6 +174,8 @@ export function Component<State, T extends TransitionForm>(props: {
     modify_history_index((i) => i - 1);
   }
 
+  const [state, transitions] = history[history_index];
+
   return (
     <div className="Machine">
       <div className="Title">Machine: {props.machine.name}</div>
@@ -168,24 +184,21 @@ export function Component<State, T extends TransitionForm>(props: {
         <button onClick={update}>update</button>
         <div>
           State{" "}
+          <button onClick={step_backward} disabled={history_index === 0}>
+            {"-"}
+          </button>
+          {history_index + 1} / {history.length}
           <button
             onClick={step_forward}
             disabled={history_index === history.length - 1}
           >
-            {"-"}
-          </button>
-          {history_index + 1} / {history.length}
-          <button onClick={step_backward} disabled={history_index === 0}>
             {"+"}
           </button>
         </div>
       </div>
 
       <div className="State">
-        {props.machine.render_State_And_Transitions(
-          history[history_index][0],
-          history[history_index][1],
-        )}
+        {props.machine.render_state_and_transitions(transitions, state)}
       </div>
     </div>
   );

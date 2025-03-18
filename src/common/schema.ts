@@ -1,5 +1,5 @@
 import { UnReadonlyTuple } from "@/utilities";
-import google from "@google/generative-ai";
+import * as google from "@google/generative-ai";
 
 // ----------------------------------------------------------------------------
 

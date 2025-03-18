@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.0",
+    "deepcopy": "^2.1.0",
     "react": "^19",
     "react-dom": "^19"
   },
