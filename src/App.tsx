@@ -1,37 +1,43 @@
-import "@/index.css";
+import "@/App.css";
 import { useState } from "react";
 import * as machine from "./frontend/machine";
-import { machine as example1 } from "./frontend/machine/example1";
+import { machine as tokens } from "./frontend/machine/tokens";
 
-const machines = { example1 } as const;
+const machines = { tokens } as const;
 
 export default function App(props: {}) {
   const [selected_machine_key, set_selected_machine_key] = useState<
-    keyof typeof machines | undefined
-  >(undefined);
+    keyof typeof machines | ""
+  >("");
 
   return (
     <div className="App">
-      {/* <div>
-        Machine:{" "}
-        <select
-          onChange={(e) => {
-            set_selected_machine_key(
-              e.target.value === "select a machine"
-                ? undefined
-                : (e.target.value as keyof typeof machines),
-            );
-          }}
-        >
-          {["select a machine", ...Object.keys(machines)].map((key) => {
-            return <option key={key}>{key}</option>;
-          })}
-        </select>
+      <div className="AppControls">
+        <div>
+          Machine:{" "}
+          <select
+            value={selected_machine_key}
+            onChange={(e) => {
+              set_selected_machine_key(
+                e.target.value as keyof typeof machines | "",
+              );
+            }}
+          >
+            {["", ...Object.keys(machines)].map((key) => {
+              return (
+                <option key={key}>
+                  {key === "" ? "select a machine" : key}
+                </option>
+              );
+            })}
+          </select>
+        </div>
       </div>
-      {selected_machine_key && (
-        <machine.Component machine={machines[selected_machine_key]} />
-      )} */}
-      <machine.Component machine={example1} />
+      <div className="AppMachine">
+        {selected_machine_key && (
+          <machine.Component machine={machines[selected_machine_key]} />
+        )}
+      </div>
     </div>
   );
 }

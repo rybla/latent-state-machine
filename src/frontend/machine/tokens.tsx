@@ -97,7 +97,7 @@ const get_transitions = (state: State) => ({
 type T = Codomain<typeof get_transitions>;
 
 export const machine = make_Machine<State, T>({
-  name: "example1",
+  name: "tokens",
   initial_State: (() => {
     const players = [
       {

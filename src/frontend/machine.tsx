@@ -178,21 +178,21 @@ export function Component<State, T extends TransitionForm>(props: {
 
   return (
     <div className="Machine">
-      <div className="Title">Machine: {props.machine.name}</div>
-
       <div className="Controls">
-        <button onClick={update}>update</button>
         <div>
-          State{" "}
+          <button onClick={update}>update</button>
+        </div>
+        <div>
+          State
           <button onClick={step_backward} disabled={history_index === 0}>
-            {"-"}
+            {" - "}
           </button>
           {history_index + 1} / {history.length}
           <button
             onClick={step_forward}
             disabled={history_index === history.length - 1}
           >
-            {"+"}
+            {" + "}
           </button>
         </div>
       </div>

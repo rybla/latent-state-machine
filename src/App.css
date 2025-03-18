@@ -1,22 +1,22 @@
-.Machine {
+.App {
     display: flex;
     flex-direction: column;
-    gap: 1em;
-    align-items: center;
+    align-items: stretch;
     justify-content: center;
+    gap: 1em;
 }
 
-.Controls {
+.AppControls {
     padding: 0.5em;
+    border-bottom: 1px solid black;
 
     display: flex;
     flex-direction: column;
-    gap: 1em;
     align-items: center;
     justify-content: center;
-
-    border: 1px solid black;
+    gap: 1em;
 }
 
-.State {
+.AppMachine {
+    padding: 0.5em;
 }
