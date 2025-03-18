@@ -72,7 +72,7 @@ export const machine = make_Machine<State, Ts>({
     ),
     actions: [],
   },
-  Transitions,
+  get_transitions: Transitions,
   prompt_Transition: async (state) => {
     const you = state.active_player;
     const recent_actions = state.actions;
@@ -151,10 +151,43 @@ Use the appropriate tools to perform your actions this turn.
     }
     return state;
   },
-  render_State: (state) => {
-    throw new Error("Not implemented");
-  },
+  render_State: (state) => (
+    <div>
+      <h2>State</h2>
+      <p>Active Player: {state.active_player}</p>
+      <p>Tokens: {JSON.stringify(state.tokens)}</p>
+      <p>Actions: {JSON.stringify(state.actions)}</p>
+    </div>
+  ),
   render_Transition: (transition) => {
-    throw new Error("Not implemented");
+    return (
+      <div>
+        <h2>Transition</h2>
+        <p>Name: {transition.name}</p>
+        <p>Recipient: {transition.args.recipient}</p>
+      </div>
+    );
   },
+  render_State_And_Transitions: (state, transitions) => (
+    <div>
+      {state && state.active_player && (
+        <div>
+          <h2>State</h2>
+          <p>Active Player: {state.active_player}</p>
+          <p>Tokens: {JSON.stringify(state.tokens)}</p>
+          <p>Actions: {JSON.stringify(state.actions)}</p>
+        </div>
+      )}
+      {transitions && transitions.length > 0 && (
+        <div>
+          <h2>Transitions</h2>
+          <ul>
+            {transitions.map((transition, index) => (
+              <li key={index}>{transition.name}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  ),
 });

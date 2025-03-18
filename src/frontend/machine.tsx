@@ -22,15 +22,17 @@ type Transitions = {
 export type Machine<State, Ts extends Transitions> = {
   name: string;
   initial_State: State;
-  Transitions: (state: State) => Ts;
+  get_transitions: (state: State) => Ts;
   prompt_Transition: (state: State) => Promise<{
     system: string;
     messages: Message[];
   }>;
   update_State: (state: State, transitions: Transition<Ts>[]) => Promise<State>;
-  render_State: (state: State) => ReactNode;
   render_Transition: (transition: Transition<Ts>) => ReactNode;
-  // render_State_And_Transitions;
+  render_State_And_Transitions: (
+    state: State,
+    transitions: Transition<Ts>[],
+  ) => ReactNode;
 };
 
 export type Message = {
@@ -69,7 +71,7 @@ async function generate_Transitions<State, Ts extends Transitions>(
   const prompt = await machine.prompt_Transition(state);
 
   const functionDeclarations: google.FunctionDeclaration[] = Object.entries(
-    machine.Transitions(state),
+    machine.get_transitions(state),
   ).map(([name, t]) => ({
     name,
     description: t.description,
@@ -120,14 +122,17 @@ async function generate_Next_State<State, Ts extends Transitions>(
 export function Component<State, Ts extends Transitions>(props: {
   machine: Machine<State, Ts>;
 }): ReactNode {
-  const [history, set_history] = useState<State[]>([
-    props.machine.initial_State,
-  ]);
+  const [history, set_history] = useState<State[]>([]);
+
+  function get_State() {
+    if (history.length === 0) return props.machine.initial_State;
+    return history[viewing_state_index];
+  }
 
   const [viewing_state_index, set_viewing_state_index] = useState(0);
 
   async function update() {
-    const current_State = history[history.length - 1];
+    const current_State = get_State();
     const next_State = await generate_Next_State(props.machine, current_State);
     set_history((history) => [...history, next_State]);
     set_viewing_state_index(history.length - 1);
@@ -169,7 +174,10 @@ export function Component<State, Ts extends Transitions>(props: {
       </div>
 
       <div className="State">
-        {props.machine.render_State(history[viewing_state_index])}
+        {props.machine.render_State_And_Transitions(
+          history[viewing_state_index],
+          [],
+        )}
       </div>
     </div>
   );
