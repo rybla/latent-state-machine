@@ -1,13 +1,24 @@
 import { useEffect, useRef } from "react";
 
-type Node = [number, number, string];
-type Edges = [number, number, string][];
+type Node = {
+  id: string;
+  label: string;
+  fillStyle: string;
+  x: number;
+  y: number;
+};
+
+type Edge = {
+  label: string;
+  source: string;
+  target: string;
+};
 
 export default function Diagram(props: {
   width: number;
   height: number;
   nodes: Node[];
-  edges: Edges;
+  edges: Edge[];
 }) {
   const canvas_ref = useRef<HTMLCanvasElement>(null);
 
@@ -22,31 +33,30 @@ export default function Diagram(props: {
 
     // Draw nodes
     props.nodes.forEach((node) => {
-      const [x, y, label] = node;
       ctx.beginPath();
-      ctx.arc(x, y, 20, 0, Math.PI * 2);
-      ctx.fillStyle = "lightblue";
+      ctx.arc(node.x, node.y, 20, 0, Math.PI * 2);
+      ctx.fillStyle = node.fillStyle;
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = "black";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(label, x, y);
+      ctx.fillText(node.label, node.x, node.y);
     });
 
     // Draw edges
     props.edges.forEach((edge) => {
-      const [n1, n2, label] = edge;
-      const node1 = props.nodes[n1];
-      const node2 = props.nodes[n2];
+      const { source, target, label } = edge;
+      const node1 = props.nodes.find((n) => n.id === source)!;
+      const node2 = props.nodes.find((n) => n.id === target)!;
 
       ctx.beginPath();
-      ctx.moveTo(node1[0], node1[1]);
-      ctx.lineTo(node2[0], node2[1]);
+      ctx.moveTo(node1.x, node1.y);
+      ctx.lineTo(node2.x, node2.y);
       ctx.stroke();
 
-      const midX = (node1[0] + node2[0]) / 2;
-      const midY = (node1[1] + node2[1]) / 2;
+      const midX = (node1.x + node2.x) / 2;
+      const midY = (node1.y + node2.y) / 2;
       ctx.fillText(label, midX, midY);
     });
   }, [props.nodes, props.edges]);

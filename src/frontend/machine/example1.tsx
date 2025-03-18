@@ -6,31 +6,38 @@ import {
   Transition,
 } from "../machine";
 import * as schema from "@/common/schema";
+import Diagram from "../widgets/diagram";
 
-const players = ["Alice", "Bob", "Charlie"] as const;
+const players = ["Alice", "Bob", "Charlie"];
 type Player = (typeof players)[number];
 
 type State = {
   active_player: Player;
   tokens: { [K in Player]: number };
-  actions: { actor: Player; action: Transition<Ts> }[];
+  actions: { actor: Player; action: Transition<T> }[];
 };
 
 const starting_tokens = 10;
 
-const Transitions = (state: State) => ({
+const Transition = (state: State) => ({
   send_tokens: {
     description:
       "Secretly send some tokens to another player. Only that player is notified that you sent the tokens.",
     schema: schema.object({
-      recipient: [
+      sender: [
         0,
+        schema.string_enum(players, {
+          description: "Your name.",
+        }),
+      ],
+      recipient: [
+        1,
         schema.string_enum(players, {
           description: "The name of the player to secretly send the tokens to.",
         }),
       ],
       amount: [
-        1,
+        2,
         schema.integer({
           description:
             "The number of tokens to secretly send. This must be at LEAST 1 and at MOST the number of tokens you have.",
@@ -42,14 +49,20 @@ const Transitions = (state: State) => ({
     description:
       "Send a short secret message to another player. Only that player can read it, and no other players will know that you sent the message.",
     schema: schema.object({
-      recipient: [
+      sender: [
         0,
+        schema.string_enum(players, {
+          description: "Your name.",
+        }),
+      ],
+      recipient: [
+        1,
         schema.string_enum(players, {
           description: "The name of the player to send the secret message to.",
         }),
       ],
       message: [
-        1,
+        2,
         schema.string({
           description:
             "The text of the secret message to send. Keep it brief (up to ~50 words).",
@@ -59,10 +72,10 @@ const Transitions = (state: State) => ({
   },
 });
 
-type Ts = Codomain<typeof Transitions>;
-type X = Transition<Ts>;
+type T = Codomain<typeof Transition>;
+type X = Transition<T>;
 
-export const machine = make_Machine<State, Ts>({
+export const machine = make_Machine<State, T>({
   name: "example1",
   initial_State: {
     active_player: players[0],
@@ -72,7 +85,7 @@ export const machine = make_Machine<State, Ts>({
     ),
     actions: [],
   },
-  get_transitions: Transitions,
+  get_transitions: Transition,
   prompt_Transition: async (state) => {
     const you = state.active_player;
     const recent_actions = state.actions;
@@ -151,43 +164,50 @@ Use the appropriate tools to perform your actions this turn.
     }
     return state;
   },
-  render_State: (state) => (
+  render_State_And_Transitions: (s, ts) => (
     <div>
-      <h2>State</h2>
-      <p>Active Player: {state.active_player}</p>
-      <p>Tokens: {JSON.stringify(state.tokens)}</p>
-      <p>Actions: {JSON.stringify(state.actions)}</p>
-    </div>
-  ),
-  render_Transition: (transition) => {
-    return (
-      <div>
-        <h2>Transition</h2>
-        <p>Name: {transition.name}</p>
-        <p>Recipient: {transition.args.recipient}</p>
-      </div>
-    );
-  },
-  render_State_And_Transitions: (state, transitions) => (
-    <div>
-      {state && state.active_player && (
-        <div>
-          <h2>State</h2>
-          <p>Active Player: {state.active_player}</p>
-          <p>Tokens: {JSON.stringify(state.tokens)}</p>
-          <p>Actions: {JSON.stringify(state.actions)}</p>
-        </div>
-      )}
-      {transitions && transitions.length > 0 && (
-        <div>
-          <h2>Transitions</h2>
-          <ul>
-            {transitions.map((transition, index) => (
-              <li key={index}>{transition.name}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {(() => (
+        <Diagram
+          width={diagram_scale}
+          height={diagram_scale}
+          nodes={players.map((p, i_p) => ({
+            id: p,
+            label: p,
+            x:
+              diagram_width / 2 +
+              diagram_scale *
+                (diagram_width / 2) *
+                Math.cos(2 * Math.PI * (i_p / players.length)),
+            y:
+              diagram_height / 2 +
+              diagram_scale *
+                (diagram_height / 2) *
+                Math.sin(2 * Math.PI * (i_p / players.length)),
+            fillStyle: p === s.active_player ? "blue" : "gray",
+          }))}
+          edges={ts.map((t) => {
+            switch (t.name) {
+              case "send_message":
+                return {
+                  source: t.args.sender,
+                  target: t.args.recipient,
+                  label: "message",
+                };
+              case "send_tokens":
+                return {
+                  source: t.args.sender,
+                  target: t.args.recipient,
+                  label: "tokens",
+                };
+            }
+          })}
+        />
+      ))()}
     </div>
   ),
 });
+
+const diagram_scale = 0.8;
+const diagram_width = 200;
+const diagram_height = 200;
+const diagram_radius = diagram_scale * diagram_width;

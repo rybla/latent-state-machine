@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import {
   NumberSchema,
   ObjectSchema,
@@ -12,26 +12,33 @@ import google from "@google/generative-ai";
 
 // -----------------------------------------------------------------------------
 
-type Transitions = {
+type TransitionForm = {
   [key: string]: {
     description: string;
     schema: ObjectSchema<{ [key: string]: unknown }>;
   };
 };
 
-export type Machine<State, Ts extends Transitions> = {
+export type Transition<T extends TransitionForm> = {
+  [K in keyof T]: { name: K; args: schema.Infer<T[K]["schema"]> };
+}[keyof T];
+
+export type Transitions<T extends TransitionForm> = Transition<T>[];
+
+// -----------------------------------------------------------------------------
+
+export type Machine<State, T extends TransitionForm> = {
   name: string;
   initial_State: State;
-  get_transitions: (state: State) => Ts;
+  get_transitions: (state: State) => T;
   prompt_Transition: (state: State) => Promise<{
     system: string;
     messages: Message[];
   }>;
-  update_State: (state: State, transitions: Transition<Ts>[]) => Promise<State>;
-  render_Transition: (transition: Transition<Ts>) => ReactNode;
+  update_State: (state: State, transitions: Transition<T>[]) => Promise<State>;
   render_State_And_Transitions: (
     state: State,
-    transitions: Transition<Ts>[],
+    transitions: Transition<T>[],
   ) => ReactNode;
 };
 
@@ -50,13 +57,7 @@ export function make_user_message(content: string): Message {
 
 // ----------------------------------------------------------------------------
 
-export type Transition<Ts extends Transitions> = {
-  [K in keyof Ts]: { name: K; args: schema.Infer<Ts[K]["schema"]> };
-}[keyof Ts];
-
-// -----------------------------------------------------------------------------
-
-export function make_Machine<State, Ts extends Transitions>(
+export function make_Machine<State, Ts extends TransitionForm>(
   machine: Machine<State, Ts>,
 ): Machine<State, Ts> {
   return machine;
@@ -64,10 +65,10 @@ export function make_Machine<State, Ts extends Transitions>(
 
 // -----------------------------------------------------------------------------
 
-async function generate_Transitions<State, Ts extends Transitions>(
-  machine: Machine<State, Ts>,
+async function generate_Transitions<State, T extends TransitionForm>(
+  machine: Machine<State, T>,
   state: State,
-): Promise<Transition<Ts>[]> {
+): Promise<Transition<T>[]> {
   const prompt = await machine.prompt_Transition(state);
 
   const functionDeclarations: google.FunctionDeclaration[] = Object.entries(
@@ -103,53 +104,60 @@ async function generate_Transitions<State, Ts extends Transitions>(
 
   const functionCalls = result.response.functionCalls();
   if (functionCalls === undefined) throw new Error("No function calls");
-  const transitions: Transition<Ts>[] = functionCalls.map(
-    (fc) => ({ name: fc.name, args: fc.args }) as Transition<Ts>,
+  const transitions: Transition<T>[] = functionCalls.map(
+    (fc) => ({ name: fc.name, args: fc.args }) as Transition<T>,
   );
   return transitions;
 }
 
-async function generate_Next_State<State, Ts extends Transitions>(
-  machine: Machine<State, Ts>,
+async function generate_Next_State<State, T extends TransitionForm>(
+  machine: Machine<State, T>,
   state: State,
-): Promise<State> {
-  const transitions = await generate_Transitions(machine, state);
-  return await machine.update_State(state, transitions);
+): Promise<[State, Transitions<T>]> {
+  const ts = await generate_Transitions(machine, state);
+  return [await machine.update_State(state, ts), ts];
 }
 
 // -----------------------------------------------------------------------------
 
-export function Component<State, Ts extends Transitions>(props: {
-  machine: Machine<State, Ts>;
+export function Component<State, T extends TransitionForm>(props: {
+  machine: Machine<State, T>;
 }): ReactNode {
-  const [history, set_history] = useState<State[]>([]);
+  const [history, set_history] = useState<[State, Transitions<T>][]>([]);
 
-  function get_State() {
-    if (history.length === 0) return props.machine.initial_State;
-    return history[viewing_state_index];
+  function get_State_and_Transitions(): [State, Transitions<T>] {
+    if (history.length === 0) return [props.machine.initial_State, []];
+    return history[history_index];
   }
 
-  const [viewing_state_index, set_viewing_state_index] = useState(0);
+  function push_history(state: State, ts: Transitions<T>) {
+    set_history((history) => [...history, [state, ts]]);
+  }
+
+  const [history_index, set_history_index] = useState(0);
+
+  function modify_history_index(f: (i: number) => number) {
+    const i = f(history_index);
+    if (i < 0 || i >= history.length) return;
+    set_history_index(i);
+  }
+
+  useEffect(() => {
+    modify_history_index(() => history.length - 1);
+  }, [history]);
 
   async function update() {
-    const current_State = get_State();
-    const next_State = await generate_Next_State(props.machine, current_State);
-    set_history((history) => [...history, next_State]);
-    set_viewing_state_index(history.length - 1);
+    const [s, _] = get_State_and_Transitions();
+    const [s_new, ts] = await generate_Next_State(props.machine, s);
+    push_history(s_new, ts);
   }
 
   async function step_forward() {
-    set_viewing_state_index((viewing_state_index) =>
-      viewing_state_index < history.length - 1
-        ? viewing_state_index + 1
-        : viewing_state_index,
-    );
+    modify_history_index((i) => i + 1);
   }
 
   async function step_backward() {
-    set_viewing_state_index((viewing_state_index) =>
-      viewing_state_index > 0 ? viewing_state_index - 1 : viewing_state_index,
-    );
+    modify_history_index((i) => i - 1);
   }
 
   return (
@@ -162,12 +170,12 @@ export function Component<State, Ts extends Transitions>(props: {
           State{" "}
           <button
             onClick={step_forward}
-            disabled={viewing_state_index === history.length - 1}
+            disabled={history_index === history.length - 1}
           >
             {"-"}
           </button>
-          {viewing_state_index + 1} / {history.length}
-          <button onClick={step_backward} disabled={viewing_state_index === 0}>
+          {history_index + 1} / {history.length}
+          <button onClick={step_backward} disabled={history_index === 0}>
             {"+"}
           </button>
         </div>
@@ -175,8 +183,8 @@ export function Component<State, Ts extends Transitions>(props: {
 
       <div className="State">
         {props.machine.render_State_And_Transitions(
-          history[viewing_state_index],
-          [],
+          history[history_index][0],
+          history[history_index][1],
         )}
       </div>
     </div>
