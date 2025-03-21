@@ -98,7 +98,7 @@ type T = Codomain<typeof get_transitions>;
 
 export const machine = make_Machine<State, T>({
   name: "tokens",
-  initial_State: (() => {
+  initial_state: (() => {
     const players = [
       {
         name: "Alice",
@@ -126,15 +126,15 @@ export const machine = make_Machine<State, T>({
     };
   })(),
   get_transitions,
-  prompt_transition: async (history, state) => {
-    const i_you = state.active_player_index;
-    const you = state.players[i_you];
+  prompt: async (h, s) => {
+    const i_you = s.active_player_index;
+    const you = s.players[i_you];
 
     return {
       system: `
 You are playing a casual role-playing game with several other players. Each player has their own secret objective.
 Your name is ${you.name} and your secret objective is: ${you.secret_objective}.
-The other players are: ${state.players
+The other players are: ${s.players
         .filter((other) => other !== you)
         .map((other) => other.name)
         .join(", ")}.
@@ -152,12 +152,12 @@ Use the appropriate tools to perform your actions each turn.
           `
 
 ${(() => {
-  if (history.length === 0) {
+  if (h.length === 0) {
     return `It's now your turn, which is the first turn of the game.`;
   } else {
     return `It's now your turn in the game. You have observed the following actions recently:\n
-    ${history
-      .slice(history.length - 5)
+    ${h
+      .slice(h.length - 5)
       .flatMap(([ts, _]) =>
         ts.flatMap((t) => {
           switch (t.name) {
@@ -190,7 +190,7 @@ ${(() => {
   }
 })()}
 
-You currently have ${state.tokens[you.name]} tokens.
+You currently have ${s.tokens[you.name]} tokens.
 
 Use the appropriate tools to perform your actions this turn.
 `.trim(),
@@ -227,7 +227,7 @@ Use the appropriate tools to perform your actions this turn.
       (state.active_player_index + 1) % state.players.length;
     return state;
   },
-  render_state_and_transitions: (s, ts) => {
+  render_state_and_transitions: (ts, s) => {
     const ts_collected: [
       { sender: string; receiver: string },
       Transition<T>[],

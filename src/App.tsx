@@ -2,6 +2,7 @@ import "@/App.css";
 import { useState } from "react";
 import * as machine from "./frontend/machine";
 import { machine as tokens } from "./frontend/machine/tokens";
+import { machine as generative_ui } from "./frontend/machine/generative_ui";
 
 const machines = { tokens } as const;
 
@@ -12,7 +13,7 @@ export default function App(props: {}) {
 
   return (
     <div className="App">
-      <div className="AppControls">
+      {/* <div className="AppControls">
         <div>
           Machine:{" "}
           <select
@@ -32,11 +33,13 @@ export default function App(props: {}) {
             })}
           </select>
         </div>
-      </div>
+      </div> */}
       <div className="AppMachine">
-        {selected_machine_key && (
+        {/* {selected_machine_key && (
           <machine.Component machine={machines[selected_machine_key]} />
-        )}
+        )} */}
+        {/* <machine.Component machine={generative_ui} /> */}
+        <machine.Component machine={tokens} />
       </div>
     </div>
   );

@@ -1,0 +1,32 @@
+.Doc {
+}
+
+.Doc.Text {
+}
+
+.Doc.Title {
+    font-size: 1.5em;
+}
+
+.Doc.Column {
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+}
+
+.Doc.Row {
+    display: flex;
+    flex-direction: row;
+    gap: 1em;
+}
+
+.Doc.Bordered {
+    border: 1px solid black;
+    padding: 0.5em;
+}
+
+.Doc.Placeholder {
+    padding: 0.5em;
+    border: 4px dotted black;
+    background-color: lightpink;
+}

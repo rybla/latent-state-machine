@@ -29,9 +29,9 @@ export type Transitions<T extends TransitionForm> = Transition<T>[];
 
 export type Machine<State, T extends TransitionForm> = {
   name: string;
-  initial_State: State;
+  initial_state: State;
   get_transitions: (state: State) => T;
-  prompt_transition: (
+  prompt: (
     history: History<State, T>,
     state: State,
   ) => Promise<{
@@ -40,8 +40,8 @@ export type Machine<State, T extends TransitionForm> = {
   }>;
   update_state: (state: State, transitions: Transition<T>[]) => Promise<State>;
   render_state_and_transitions: (
-    state: State,
     transitions: Transition<T>[],
+    state: State,
   ) => ReactNode;
 };
 
@@ -73,7 +73,7 @@ async function generate_transitions<State, T extends TransitionForm>(
   history: History<State, T>,
   state: State,
 ): Promise<Transition<T>[]> {
-  const prompt = await machine.prompt_transition(history, state);
+  const prompt = await machine.prompt(history, state);
 
   const functionDeclarations: google.FunctionDeclaration[] = Object.entries(
     machine.get_transitions(state),
@@ -142,7 +142,7 @@ export function Component<State, T extends TransitionForm>(props: {
   machine: Machine<State, T>;
 }): ReactNode {
   const [history, set_history] = useState<History<State, T>>([
-    [[], props.machine.initial_State],
+    [[], props.machine.initial_state],
   ]);
   const [history_index, set_history_index] = useState(0);
 
@@ -198,7 +198,7 @@ export function Component<State, T extends TransitionForm>(props: {
       </div>
 
       <div className="State">
-        {props.machine.render_state_and_transitions(transitions, state)}
+        {props.machine.render_state_and_transitions(state, transitions)}
       </div>
     </div>
   );
