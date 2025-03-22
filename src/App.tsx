@@ -39,7 +39,8 @@ export default function App(props: {}) {
           <machine.Component machine={machines[selected_machine_key]} />
         )} */}
         {/* <machine.Component machine={generative_ui} /> */}
-        <machine.Component machine={tokens} />
+        {/* <machine.Component machine={tokens} /> */}
+        <machine.Component machine={generative_ui} />
       </div>
     </div>
   );
