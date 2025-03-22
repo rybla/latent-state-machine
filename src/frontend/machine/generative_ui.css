@@ -1,3 +1,21 @@
+.State {
+    width: 100%;
+}
+
+.View {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    border: 1px solid black;
+}
+
+.View > * {
+    flex: 1;
+    flex-basis: 0;
+}
+
 .Doc {
 }
 
@@ -8,16 +26,18 @@
     font-size: 1.5em;
 }
 
-.Doc.Column {
+.Doc.Container.column {
+    padding: 0.5em;
     display: flex;
     flex-direction: column;
-    gap: 1em;
+    gap: 0.5em;
 }
 
-.Doc.Row {
+.Doc.Container.row {
+    padding: 0.5em;
     display: flex;
     flex-direction: row;
-    gap: 1em;
+    gap: 0.5em;
 }
 
 .Doc.Bordered {
@@ -29,4 +49,8 @@
     padding: 0.5em;
     border: 4px dotted black;
     background-color: lightpink;
+}
+
+pre {
+    white-space: pre;
 }

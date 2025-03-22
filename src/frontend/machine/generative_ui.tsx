@@ -1,4 +1,4 @@
-import { Codomain, identity, wrap } from "@/utilities";
+import { absurd, Codomain, identity, wrap } from "@/utilities";
 import { make_Machine, make_user_message } from "../machine";
 import * as schema from "@/common/schema";
 import deepcopy from "deepcopy";
@@ -7,8 +7,46 @@ import "./generative_ui.css";
 
 // -----------------------------------------------------------------------------
 
-const design_goal =
-  "A simple, user-friendly interface for a task management app aimed at busy students. The goal is to create a clean, single-screen layout that lets users quickly add tasks, mark them as complete, and view their upcoming deadlines, using a minimal color palette and clear typography to keep it approachable and distraction-free.";
+// const design_goal =
+//   "A simple, user-friendly interface for a task management app aimed at busy students. The goal is to create a clean, single-screen layout that lets users quickly add tasks, mark them as complete, and view their upcoming deadlines, using a minimal color palette and clear typography to keep it approachable and distraction-free.";
+
+const design_goal = `
+- **Header (top bar)**
+  - Fixed at the top, full width
+  - Light gray background, subtle shadow
+  - Left: "TODO" title in bold, dark gray text
+  - Right: Blue circular "Add" button with white "+" icon
+    - Darkens slightly when hovered or tapped
+
+- **Main Content (middle area)**
+  - Soft white background, fills remaining screen space
+  - Tasks in a single-column list
+    - Each task in a white card with light gray border, subtle shadow
+    - Cards spaced with small gaps (about 10px)
+    - Inside each card:
+      - Left: Circular checkbox (gray outline, fills blue with white checkmark when checked)
+      - Right: Task text
+        - Bold, dark gray title
+        - Smaller, light gray description below (if any)
+  - Empty list shows:
+    - Centered light gray "No tasks yet" text (italicized)
+    - Simple line-drawn empty list icon above it
+
+- **Footer (bottom bar)**
+  - Fixed at bottom, full width
+  - Light gray background
+  - Right: Small blue "Clear Completed" button with white text
+    - Rounded edges, darkens on hover/tap
+
+- **Overall Style**
+  - Clean, minimal look with sans-serif font (e.g., Roboto)
+  - Soft whites/grays, blue accents for buttons and checks
+  - Lots of padding for an uncluttered feel
+  - Smooth, simple animations (e.g., checkbox fill, new tasks slide in)
+  - Adjusts for screen size:
+    - Smaller screens: Cards shrink, text fits neatly
+    - Larger screens: Centered content with wider margins
+`.trim();
 
 // -----------------------------------------------------------------------------
 
@@ -16,11 +54,12 @@ type State = {
   doc: Doc;
   id_counter: number;
   design_goal: string;
+  finished: boolean;
 };
 
 const get_transitions = (state: State) => ({
-  insert_text: {
-    description: "Insert text into a placeholder",
+  replace_placeholder_with_text: {
+    description: "Replace a placeholder with a text element.",
     schema: schema.object({
       id: [
         0,
@@ -32,8 +71,8 @@ const get_transitions = (state: State) => ({
       text: [1, schema.string()],
     }),
   },
-  insert_title: {
-    description: "Insert title into a placeholder",
+  replace_placeholder_with_title: {
+    description: "Replace a placeholder with a title element.",
     schema: schema.object({
       id: [
         0,
@@ -45,8 +84,8 @@ const get_transitions = (state: State) => ({
       title: [1, schema.string()],
     }),
   },
-  insert_container: {
-    description: "Insert container into a placeholder",
+  replace_placeholder_with_container: {
+    description: "Replace a placeholder with a container element.",
     schema: schema.object({
       id: [
         0,
@@ -58,7 +97,20 @@ const get_transitions = (state: State) => ({
       style: [1, schema.string_enum(["row", "column"])],
     }),
   },
-  add_child: {
+  replace_placeholder_with_button: {
+    description: "Replace a placeholder with a button element.",
+    schema: schema.object({
+      id: [
+        0,
+        schema.string({
+          description:
+            "The ID of the placeholder where the button will be inserted.",
+        }),
+      ],
+      label: [1, schema.string()],
+    }),
+  },
+  add_child_to_container: {
     description: "Add child placeholder to a container",
     schema: schema.object({
       id: [
@@ -70,7 +122,7 @@ const get_transitions = (state: State) => ({
       ],
     }),
   },
-  wrap_with_border: {
+  wrap_border_around_element: {
     description: "Wrap a border around an element",
     schema: schema.object({
       id: [
@@ -81,7 +133,7 @@ const get_transitions = (state: State) => ({
       ],
     }),
   },
-  wrap_in_container: {
+  wrap_container_around_element: {
     description:
       "Wrap an element in a container. The element will become the first child of the new container.",
     schema: schema.object({
@@ -93,6 +145,11 @@ const get_transitions = (state: State) => ({
       ],
       style: [1, schema.string_enum(["row", "column"])],
     }),
+  },
+  set_finished: {
+    description:
+      "Set whether or not the design is finished. Use this tool to set the design as finished (i.e. finished = true) when the design has satisfied the user's design goal.",
+    schema: schema.object({ finished: [0, schema.boolean()] }),
   },
 });
 
@@ -108,7 +165,9 @@ export const machine = make_Machine<State, T>({
     },
     id_counter: 1,
     design_goal,
+    finished: false,
   },
+  get_finished: (s) => s.finished,
   get_transitions,
   prompt: async (h, s) => {
     const prompt = {
@@ -162,6 +221,8 @@ ${show_Doc(s.doc)}
               ...d,
               child: modify_at_id(d.child, id, f),
             };
+          case "Button":
+            return d;
           case "Placeholder":
             return d;
         }
@@ -170,7 +231,7 @@ ${show_Doc(s.doc)}
 
     for (const t of ts) {
       switch (t.name) {
-        case "insert_text": {
+        case "replace_placeholder_with_text": {
           s_new.doc = modify_at_id(s_new.doc, t.args.id, () => ({
             type: "Text",
             id: `${s_new.id_counter++}`,
@@ -178,7 +239,7 @@ ${show_Doc(s.doc)}
           }));
           break;
         }
-        case "insert_title": {
+        case "replace_placeholder_with_title": {
           s_new.doc = modify_at_id(s_new.doc, t.args.id, () => ({
             type: "Title",
             id: `${s_new.id_counter++}`,
@@ -186,7 +247,7 @@ ${show_Doc(s.doc)}
           }));
           break;
         }
-        case "insert_container": {
+        case "replace_placeholder_with_container": {
           s_new.doc = modify_at_id(s_new.doc, t.args.id, () => ({
             type: "Container",
             id: `${s_new.id_counter++}`,
@@ -195,7 +256,15 @@ ${show_Doc(s.doc)}
           }));
           break;
         }
-        case "add_child": {
+        case "replace_placeholder_with_button": {
+          s_new.doc = modify_at_id(s_new.doc, t.args.id, () => ({
+            type: "Button",
+            id: `${s_new.id_counter++}`,
+            label: t.args.label,
+          }));
+          break;
+        }
+        case "add_child_to_container": {
           s_new.doc = modify_at_id(s_new.doc, t.args.id, (d) => {
             switch (d.type) {
               case "Container":
@@ -218,7 +287,7 @@ ${show_Doc(s.doc)}
           });
           break;
         }
-        case "wrap_with_border": {
+        case "wrap_border_around_element": {
           s_new.doc = modify_at_id(s_new.doc, t.args.id, (d) => ({
             type: "Bordered",
             id: `${s_new.id_counter++}`,
@@ -226,7 +295,7 @@ ${show_Doc(s.doc)}
           }));
           break;
         }
-        case "wrap_in_container": {
+        case "wrap_container_around_element": {
           s_new.doc = modify_at_id(s_new.doc, t.args.id, (d) => ({
             type: "Container",
             id: `${s_new.id_counter++}`,
@@ -235,6 +304,11 @@ ${show_Doc(s.doc)}
           }));
           break;
         }
+        case "set_finished":
+          s_new.finished = true;
+          break;
+        default:
+          return absurd(t);
       }
     }
 
@@ -244,9 +318,16 @@ ${show_Doc(s.doc)}
   render_state_and_transitions: (ts, s) => {
     return (
       <>
-        <pre>{JSON.stringify(s.doc, undefined, 4)}</pre>
-        <pre>{JSON.stringify(ts, undefined, 4)}</pre>
-        <DocComponent doc={s.doc} />
+        <div className="View">
+          <div>
+            <div>finished: {s.finished ? "true" : "false"}</div>
+            <div>doc:</div>
+            <pre>{show_Doc(s.doc)}</pre>
+            <div>transitions:</div>
+            <pre>{JSON.stringify(ts, undefined, 4)}</pre>
+          </div>
+          <DocComponent doc={s.doc} />
+        </div>
       </>
     );
   },
@@ -259,7 +340,8 @@ type Doc =
   | { type: "Title"; id: string; content: string }
   | { type: "Container"; id: string; style: "row" | "column"; children: Doc[] }
   | { type: "Bordered"; id: string; child: Doc }
-  | { type: "Placeholder"; id: string; hint: string };
+  | { type: "Placeholder"; id: string; hint: string }
+  | { type: "Button"; id: string; label: string };
 
 function DocComponent(props: { doc: Doc }): ReactNode {
   function render(d: Doc, key?: string): ReactNode {
@@ -272,12 +354,14 @@ function DocComponent(props: { doc: Doc }): ReactNode {
         return <div className={`Doc ${d.type}`}>{d.content}</div>;
       case "Container":
         return (
-          <div className={`Doc ${d.type}`}>
+          <div className={`Doc ${d.type} ${d.style}`}>
             {d.children.map((d, i) => render(d, `${i}`))}
           </div>
         );
       case "Bordered":
         return <div className={`Doc ${d.type}`}>{render(d.child)}</div>;
+      case "Button":
+        return <button className={`Doc ${d.type}`}>{d.label}</button>;
     }
   }
 
@@ -285,53 +369,52 @@ function DocComponent(props: { doc: Doc }): ReactNode {
 }
 
 /** Constructs a string that is a structured description of the given Doc. */
-function show_Doc(d: Doc, depth?: number): string {
-  depth = depth ?? 0;
-  const indent = "    ".repeat(depth);
+function show_Doc(d: Doc, depth_?: number): string {
+  const depth = depth_ ?? 0;
+  const indent_segment = "    ";
+  const indent = (depth: number) => indent_segment.repeat(depth);
+
+  function helper(
+    label: string,
+    props_: [string, string][],
+    value?: string,
+    children?: string[],
+  ): string {
+    const props_string = props_
+      .map(([key, value]) => `${key}: ${value}`)
+      .join(", ");
+
+    if (children === undefined) {
+      return `${indent(depth)}${label} (${props_string})${value === undefined ? "" : `: ${value}`}`;
+    } else if (children.length === 0) {
+      return `${indent(depth)}${label} (${props_string}):${value === undefined ? "" : ` ${value}`}\n${indent(depth + 1)}currently has no children`;
+    } else {
+      return `${indent(depth)}${label} (${props_string}):${value === undefined ? "" : ` ${value}`}\n${children.join("\n")}`;
+    }
+  }
 
   switch (d.type) {
     case "Placeholder":
-      return show_Doc_helper(`${indent}placeholder`, [
-        ["id", `${d.id}`],
-        ["hint", d.hint],
-      ]);
+      return helper(`placeholder`, [["id", `${d.id}`]], d.hint);
     case "Text":
-      return show_Doc_helper(`${indent}text`, [
-        ["id", `${d.id}`],
-        ["content", d.content],
-      ]);
+      return helper(`text`, [["id", `${d.id}`]], d.content);
     case "Title":
-      return show_Doc_helper(`${indent}title`, [
-        ["id", `${d.id}`],
-        ["content", d.content],
-      ]);
+      return helper(`title`, [["id", `${d.id}`]], d.content);
     case "Container":
-      return show_Doc_helper(
-        `${indent}container`,
+      return helper(
+        `container`,
         [
           ["id", `${d.id}`],
           ["style", d.style],
         ],
+        undefined,
         d.children.map((d) => show_Doc(d, depth + 1)),
       );
     case "Bordered":
-      return show_Doc_helper(
-        `${indent}bordered`,
-        [["id", `${d.id}`]],
-        [show_Doc(d.child, depth + 1)],
-      );
-  }
-}
-
-function show_Doc_helper(
-  label: string,
-  props_: [string, string][],
-  children?: string[],
-): string {
-  const props = props_.map(([key, value]) => `${key}: ${value}`).join(", ");
-  if (children === undefined) {
-    return `${label} (${props})`;
-  } else {
-    return `${label} (${props}):\n${children.join("\n")}`;
+      return helper(`bordered`, [["id", `${d.id}`]], undefined, [
+        show_Doc(d.child, depth + 1),
+      ]);
+    case "Button":
+      return helper(`button`, [["id", `${d.id}`]], d.label);
   }
 }

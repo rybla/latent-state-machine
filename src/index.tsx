@@ -10,6 +10,7 @@ import {
   ResponseData_GenerateStructure,
 } from "@/common/endpoint";
 import * as schema from "@/common/schema";
+import { show_any } from "./utilities";
 
 const server = serve({
   routes: {
@@ -19,16 +20,7 @@ const server = serve({
     [endpoint_Generate]: {
       async POST(request) {
         const request_data: RequestData_Generate = await request.json();
-
-        console.log(
-          `
-request_data:
-  - systemInstruction:
-    ${JSON.stringify(request_data.systemInstruction)}
-  - content:
-${request_data.content.map((content) => `    - ${JSON.stringify(content)}`)}
-`.trim(),
-        );
+        console.log(show_any(request_data));
 
         const client = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
         const model = client.getGenerativeModel({
@@ -42,6 +34,7 @@ ${request_data.content.map((content) => `    - ${JSON.stringify(content)}`)}
             contents: request_data.content,
           });
         const response_data: ResponseData_Generate = { result };
+        console.log(show_any(response_data));
         return new Response(JSON.stringify(response_data));
       },
     },

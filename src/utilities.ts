@@ -67,3 +67,7 @@ export function show_any(x: any, level?: number): string {
       return "undefined";
   }
 }
+
+export function absurd(x: never): any {
+  return x;
+}

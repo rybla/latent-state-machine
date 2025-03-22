@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import {
   NumberSchema,
   ObjectSchema,
@@ -30,6 +30,7 @@ export type Transitions<T extends TransitionForm> = Transition<T>[];
 export type Machine<State, T extends TransitionForm> = {
   name: string;
   initial_state: State;
+  get_finished: (state: State) => boolean;
   get_transitions: (state: State) => T;
   prompt: (
     history: History<State, T>,
@@ -145,6 +146,7 @@ export function Component<State, T extends TransitionForm>(props: {
     [[], props.machine.initial_state],
   ]);
   const [history_index, set_history_index] = useState(0);
+  const running_ref = useRef(false);
 
   function push_history(ts: Transitions<T>, state: State) {
     set_history((history) => [...history, [ts, state]]);
@@ -166,6 +168,23 @@ export function Component<State, T extends TransitionForm>(props: {
     push_history(ts, s_new);
   }
 
+  async function start() {
+    var [_, s] = history[history_index];
+    running_ref.current = true;
+
+    while (running_ref.current && !props.machine.get_finished(s)) {
+      const [ts, s_new] = await generate_next_state(props.machine, history, s);
+      push_history(ts, s_new);
+      s = s_new;
+    }
+
+    running_ref.current = false;
+  }
+
+  async function stop() {
+    running_ref.current = false;
+  }
+
   async function step_forward() {
     modify_history_index((i) => i + 1);
   }
@@ -179,6 +198,10 @@ export function Component<State, T extends TransitionForm>(props: {
   return (
     <div className="Machine">
       <div className="Controls">
+        <div>
+          <button onClick={start}>start</button>
+          <button onClick={stop}>stop</button>
+        </div>
         <div>
           <button onClick={update}>update</button>
         </div>
