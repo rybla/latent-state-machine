@@ -38,3 +38,32 @@ export function wrap(text: string, max_width: number): string {
 
   return lines.join("\n");
 }
+
+export function show_any(x: any, level?: number): string {
+  const level_ = level === undefined ? 0 : level;
+  const indent = "\n" + "    ".repeat(level_);
+
+  switch (typeof x) {
+    case "string":
+      return x;
+    case "symbol":
+    case "bigint":
+    case "symbol":
+    case "boolean":
+    case "number":
+      return x.toString();
+    case "object": {
+      if (Array.isArray(x)) {
+        return `${x.map((y) => `${indent}- ${show_any(y, level_ + 1)}`).join("")}`;
+      } else {
+        return `${Object.entries(x)
+          .map(([k, v]) => `${indent}- ${k}: ${show_any(v, level_ + 1)}`)
+          .join("")}`;
+      }
+    }
+    case "function":
+      return `<function ${x.name || "anonymous"}>`;
+    case "undefined":
+      return "undefined";
+  }
+}

@@ -23,8 +23,9 @@ const server = serve({
         console.log(
           `
 request_data:
-  - systemInstruction:\n    ${JSON.stringify(request_data.systemInstruction)}
-  - content:\n
+  - systemInstruction:
+    ${JSON.stringify(request_data.systemInstruction)}
+  - content:
 ${request_data.content.map((content) => `    - ${JSON.stringify(content)}`)}
 `.trim(),
         );

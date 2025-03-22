@@ -291,14 +291,47 @@ function show_Doc(d: Doc, depth?: number): string {
 
   switch (d.type) {
     case "Placeholder":
-      return `${indent}placeholder (id: ${d.id}): ${d.hint}`;
+      return show_Doc_helper(`${indent}placeholder`, [
+        ["id", `${d.id}`],
+        ["hint", d.hint],
+      ]);
     case "Text":
-      return `${indent}text (id: ${d.id}) ${d.content}`;
+      return show_Doc_helper(`${indent}text`, [
+        ["id", `${d.id}`],
+        ["content", d.content],
+      ]);
     case "Title":
-      return `${indent}title (id: ${d.id}) ${d.content}`;
+      return show_Doc_helper(`${indent}title`, [
+        ["id", `${d.id}`],
+        ["content", d.content],
+      ]);
     case "Container":
-      return `${indent}container (id: ${d.id}, style: ${d.style}):\n${d.children.map((d) => show_Doc(d, depth + 1)).join("\n")}`;
+      return show_Doc_helper(
+        `${indent}container`,
+        [
+          ["id", `${d.id}`],
+          ["style", d.style],
+        ],
+        d.children.map((d) => show_Doc(d, depth + 1)),
+      );
     case "Bordered":
-      return `${indent}bordered (id: ${d.id}):\n${show_Doc(d.child, depth + 1)}`;
+      return show_Doc_helper(
+        `${indent}bordered`,
+        [["id", `${d.id}`]],
+        [show_Doc(d.child, depth + 1)],
+      );
+  }
+}
+
+function show_Doc_helper(
+  label: string,
+  props_: [string, string][],
+  children?: string[],
+): string {
+  const props = props_.map(([key, value]) => `${key}: ${value}`).join(", ");
+  if (children === undefined) {
+    return `${label} (${props})`;
+  } else {
+    return `${label} (${props}):\n${children.join("\n")}`;
   }
 }
